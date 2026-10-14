@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html{color-scheme:light}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Cutline Thumbnail Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a press-room job ticket — settings rail on the left, proof sheet on the right; stacks on phones. */
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --ink: #17191d;
+  --muted: #5d636e;
+  --line: #d9dce2;
+  --accent: #c8006e;        /* cut-contour magenta */
+  --accent-ink: #ffffff;
+  --proof: #e6e8ec;         /* behind proofs so white edges read */
+  --ok: #1f7a4d;
+  --warn: #9a5b00;
+  --err: #b42318;
+  --focus: #c8006e;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121418; --panel: #1b1e24; --ink: #eceef2; --muted: #a2a8b3; --line: #2f343d;
+  --accent: #ff4fa8; --accent-ink: #1a0010; --proof: #2a2e36; --ok: #5cc98e; --warn: #f0b24a; --err: #ff7a6e; --focus: #ff4fa8;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121418; --panel: #1b1e24; --ink: #eceef2; --muted: #a2a8b3; --line: #2f343d;
+  --accent: #ff4fa8; --accent-ink: #1a0010; --proof: #2a2e36; --ok: #5cc98e; --warn: #f0b24a; --err: #ff7a6e; --focus: #ff4fa8;
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 20px; padding-block: 24px 48px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; margin-bottom: 20px; }
+h1 { font-family: var(--display); font-stretch: 78%; font-weight: 800; font-size: clamp(1.7rem, 3.4vw, 2.4rem); letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); max-width: 62ch; margin: 4px 0 0; }
+.layout { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+.rail { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 860px) { .rail { position: static; } }
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 16px; }
+.eyebrow { font-family: var(--display); font-stretch: 80%; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); margin: 0; }
+.field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; }
+.field label { font-size: 0.9rem; }
+.field .hint { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); margin-top: -2px; }
+input[type="text"], input[type="number"] { font: 500 0.9rem var(--mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; min-width: 0; }
+input[type="number"] { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+.field.wide { grid-template-columns: 1fr; }
+input[type="color"] { width: 44px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+.unit { font: 0.78rem var(--mono); color: var(--muted); }
+.numwrap { display: flex; align-items: center; gap: 6px; }
+
+.pad { display: grid; grid-template-columns: repeat(3, 38px); grid-template-rows: repeat(3, 38px); gap: 4px; }
+.pad button { font: 600 0.95rem var(--mono); border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 4px; cursor: pointer; padding: 0; }
+.pad button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pad button.off { font-size: 0.66rem; letter-spacing: 0.04em; }
+.padrow { display: flex; gap: 14px; align-items: center; }
+.padrow p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+button:focus-visible, input:focus-visible, .drop:focus-visible, .card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.drop { border: 2px dashed var(--line); border-radius: 6px; background: var(--panel); padding: 22px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; cursor: pointer; transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.drop strong { font-family: var(--display); font-stretch: 85%; font-size: 1.15rem; display: block; }
+.drop span { color: var(--muted); font-size: 0.88rem; }
+.btn { font: 600 0.88rem var(--body); border-radius: 4px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn:disabled { opacity: .45; cursor: default; }
+
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.bar .count { font: 0.85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.preview { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.preview .stage { background: var(--proof); border-radius: 4px; display: grid; place-items: center; padding: 16px; min-height: 260px; }
+.preview img { max-height: 62vh; width: auto; box-shadow: 0 1px 3px rgb(0 0 0 / .18); background: #fff; }
+.preview .meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+.preview .meta .name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.mono { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; min-width: 0; text-align: left; font: inherit; color: inherit; }
+.card[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card .thumb { aspect-ratio: 1; max-width: 100%; background: var(--proof); border-radius: 3px; display: grid; place-items: center; overflow: hidden; }
+.card .thumb img { max-width: 92%; max-height: 92%; background: #fff; }
+.card .fn { font-size: 0.84rem; font-weight: 600; overflow-wrap: anywhere; }
+.card .row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.pill { font: 600 0.68rem var(--display); text-transform: uppercase; letter-spacing: .07em; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.done { color: var(--ok); } .pill.working, .pill.queued { color: var(--muted); } .pill.warn { color: var(--warn); } .pill.error { color: var(--err); } .pill.sample { color: var(--accent); }
+.card .note { font-size: 0.78rem; color: var(--warn); }
+.card .err { font-size: 0.78rem; color: var(--err); }
+.spinner { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } .drop { transition: none; } }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 4px; font-size: 0.88rem; max-width: calc(100% - 32px); }
+.pv-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { font: 600 0.8rem var(--body); padding: 6px 12px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 9px 12px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); font-size: 0.86rem; }
+.stage { position: relative; }
+.stage .busy { position: absolute; top: 10px; right: 10px; }
+.stage .msg { color: var(--err); font-size: 0.88rem; max-width: 46ch; text-align: center; }
+.sizebox { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font: 0.82rem var(--mono); font-variant-numeric: tabular-nums; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; }
+.sizebox dt { color: var(--muted); }
+.sizebox dd { margin: 0; text-align: right; color: var(--ink); }
+.sizebox dd.out { font-weight: 500; color: var(--accent); }
+.sizebox .empty { grid-column: 1 / -1; color: var(--muted); }
+.foot { color: var(--muted); font-size: 0.8rem; max-width: 70ch; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Cutline Thumbnail Maker</h1>
+      <p class="sub">Drop print-ready PDFs. The <b>cutline</b> spot color is recolored to a tint of black, art outside the cut is removed, and an offset shadow is added behind the sticker shape. Save each JPG or the whole batch as a ZIP.</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="rail" aria-label="Settings">
+      <div class="group">
+        <p class="eyebrow">Cutline</p>
+        <div class="field wide">
+          <label for="spotName">Spot color name</label>
+          <input type="text" id="spotName" value="cutline" autocomplete="off" spellcheck="false">
+          <div class="hint">Separate alternates with commas. Matching ignores case, spaces and dashes.</div>
+        </div>
+        <div class="field">
+          <label for="kTint">Line color</label>
+          <div class="numwrap"><input type="number" id="kTint" min="0" max="100" step="5" value="50"><span class="unit">% K</span></div>
+        </div>
+        <label class="check"><input type="checkbox" id="clipOutside" checked> Remove art outside the cutline (bleed, marks)</label>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Shadow</p>
+        <div class="padrow">
+          <div class="pad" id="pad" role="group" aria-label="Shadow direction"></div>
+          <p>Which way the shadow falls. Center turns it off.</p>
+        </div>
+        <div class="field">
+          <label for="offset">Offset</label>
+          <div class="numwrap"><input type="number" id="offset" min="0" max="10" step="0.1" value="1.2"><span class="unit">% of size</span></div>
+        </div>
+        <div class="field">
+          <label for="soft">Softness</label>
+          <div class="numwrap"><input type="number" id="soft" min="0" max="5" step="0.1" value="0"><span class="unit">% of size</span></div>
+        </div>
+        <div class="field">
+          <label for="shColor">Shadow color</label>
+          <input type="color" id="shColor" value="#b3b3b3">
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Output size</p>
+        <dl class="sizebox" id="sizeInfo"></dl>
+        <div class="field">
+          <label for="maxW">Max width</label>
+          <div class="numwrap"><input type="number" id="maxW" min="50" max="20000" step="10" placeholder="Full"><span class="unit">px</span></div>
+          <div class="hint">Leave blank for full size. Height scales to keep the proportions. Files narrower than this stay at full size.</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add PDF files">
+        <div><strong>Drop PDFs here</strong><span>Any number of files. Every page with a cutline becomes one JPG. Nothing leaves your browser.</span></div>
+        <button class="btn" id="pick" type="button">Choose PDFs</button>
+        <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple hidden>
+      </div>
+
+      <section class="preview" id="preview" aria-live="polite"></section>
+
+      <div class="bar">
+        <span class="count" id="count"></span>
+        <div class="actions">
+          <button class="btn ghost" id="clearAll" type="button">Clear</button>
+          <button class="btn" id="applyAll" type="button" hidden>Apply to all</button>
+          <button class="btn" id="saveZip" type="button">Save all as ZIP</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <p class="foot">How it works: the tool renders each page twice, once with the cutline in your black tint and once in a marker color. The pixels that differ are the cutline. Everything enclosed by it is the sticker; the shadow is that shape, shifted. The cutline must be a closed path for the shadow and trimming to work.</p>
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const { PDFDocument, PDFName, PDFArray, PDFDict, PDFStream, rgb } = PDFLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  // ---------- settings ----------
+  const DIRS = [["nw",-1,-1,"↖"],["n",0,-1,"↑"],["ne",1,-1,"↗"],["w",-1,0,"←"],["off",0,0,"OFF"],["e",1,0,"→"],["sw",-1,1,"↙"],["s",0,1,"↓"],["se",1,1,"↘"]];
+  let dir = "ne";
+  const pad = $("pad");
+  DIRS.forEach(([k,,,label]) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "dir-" + k; b.textContent = label; b.dataset.dir = k;
+    if (k === "off") b.className = "off";
+    b.setAttribute("aria-label", k === "off" ? "No shadow" : "Shadow toward " + k.toUpperCase());
+    b.setAttribute("aria-pressed", String(k === dir));
+    b.addEventListener("click", () => { dir = k; pad.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.dir === dir))); onSettingsChange(); });
+    pad.appendChild(b);
+  });
+
+  const num = (id, lo, hi, d) => { const v = parseFloat($(id).value); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  function settings() {
+    const d = DIRS.find(x => x[0] === dir);
+    return {
+      names: $("spotName").value.split(",").map(norm).filter(Boolean),
+      k: num("kTint", 0, 100, 50) / 100,
+      ux: d[1], uy: d[2],
+      offset: num("offset", 0, 10, 1.2) / 100,
+      soft: num("soft", 0, 5, 0) / 100,
+      shColor: $("shColor").value,
+      maxW: Math.round(num("maxW", 0, 20000, 0)),   // 0 = full size (1 px per PDF point, 72 ppi)
+      quality: 1,
+      suffix: "_Thumbnail",
+      clip: $("clipOutside").checked,
+    };
+  }
+
+  // ---------- PDF variant: rewrite the cutline Separation's alternate color ----------
+  function decodeName(n) {
+    return n.asString().slice(1).replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  async function makeVariant(bytes, names, mode, k) {
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+    const ctx = doc.context;
+    const seen = new Set();
+    const hits = [];
+    const visit = (o) => {
+      if (!o || typeof o !== "object" || seen.has(o)) return;
+      if (o instanceof PDFArray) {
+        seen.add(o);
+        const a0 = o.size() >= 4 ? o.get(0) : null, a1 = a0 ? o.get(1) : null;
+        if (a0 instanceof PDFName && a0.asString() === "/Separation" && a1 instanceof PDFName && names.includes(norm(decodeName(a1)))) hits.push(o);
+        for (let i = 0; i < o.size(); i++) visit(o.get(i));
+      } else if (o instanceof PDFStream) {
+        seen.add(o); visit(o.dict);
+      } else if (o instanceof PDFDict) {
+        seen.add(o); for (const [, v] of o.entries()) visit(v);
+      }
+    };
+    for (const [, obj] of ctx.enumerateIndirectObjects()) visit(obj);
+    for (const arr of hits) {
+      if (mode === "gray") {
+        arr.set(2, PDFName.of("DeviceCMYK"));
+        arr.set(3, ctx.obj({ FunctionType: 2, Domain: [0, 1], C0: [0, 0, 0, 0], C1: [0, 0, 0, k], N: 1 }));
+      } else {
+        arr.set(2, PDFName.of("DeviceRGB"));
+        arr.set(3, ctx.obj({ FunctionType: 2, Domain: [0, 1], C0: [1, 1, 1], C1: [1, 0, 1], N: 1 }));
+      }
+    }
+    return { bytes: await doc.save({ useObjectStreams: false }), hits: hits.length };
+  }
+
+  // ---------- rendering + pixel work ----------
+  async function renderRegion(page, scale, ox, oy, W, H) {
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    const viewport = page.getViewport({ scale });
+    await page.render({ canvasContext: g, viewport, transform: [1, 0, 0, 1, -ox, -oy], annotationMode: 0 }).promise;
+    return { canvas: c, data: g.getImageData(0, 0, W, H) };
+  }
+  function diffMask(a, b) {
+    const n = a.width * a.height, m = new Uint8Array(n), A = a.data, B = b.data;
+    let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, W = a.width;
+    for (let i = 0, j = 0; i < n; i++, j += 4) {
+      const d = Math.abs(A[j] - B[j]) + Math.abs(A[j+1] - B[j+1]) + Math.abs(A[j+2] - B[j+2]);
+      if (d > 24) {
+        m[i] = 1;
+        const x = i % W, y = (i - x) / W;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    return { m, bbox: x1 < 0 ? null : { x0, y0, x1, y1 } };
+  }
+  // Everything not reachable from the border without crossing the cutline is the sticker.
+  function stickerMask(cut, W, H) {
+    const n = W * H, bar = new Uint8Array(n), out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (cut[i]) {
+      bar[i] = 1; const x = i % W;
+      if (x > 0) bar[i-1] = 1; if (x < W-1) bar[i+1] = 1; if (i >= W) bar[i-W] = 1; if (i < n-W) bar[i+W] = 1;
+    }
+    const stack = new Int32Array(n); let sp = 0;
+    const push = (i) => { if (!bar[i] && !out[i]) { out[i] = 1; stack[sp++] = i; } };
+    for (let x = 0; x < W; x++) { push(x); push(n - W + x); }
+    for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
+    while (sp) {
+      const i = stack[--sp], x = i % W;
+      if (x > 0) push(i-1); if (x < W-1) push(i+1); if (i >= W) push(i-W); if (i < n-W) push(i+W);
+    }
+    // undo the 1px dilation on the outside
+    const grow = [];
+    for (let i = 0; i < n; i++) if (!out[i] && !cut[i]) {
+      const x = i % W;
+      if ((x > 0 && out[i-1]) || (x < W-1 && out[i+1]) || (i >= W && out[i-W]) || (i < n-W && out[i+W])) grow.push(i);
+    }
+    for (const i of grow) out[i] = 1;
+    let inside = 0, interior = 0;
+    const mask = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if (!out[i]) { mask[i] = 1; inside++; if (!cut[i]) interior++; }
+    return { mask, inside, interior };
+  }
+  function maskCanvas(mask, W, H) {
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d"); const img = g.createImageData(W, H); const d = img.data;
+    for (let i = 0, j = 3; i < mask.length; i++, j += 4) if (mask[i]) d[j] = 255;
+    g.putImageData(img, 0, 0); return c;
+  }
+
+  // Full size is 1 px per PDF point; a max width scales the whole page down proportionally.
+  function outScale(s, pw) { return s.maxW > 0 && s.maxW < pw ? s.maxW / pw : 1; }
+  function outDims(s, pw, ph) { const k = outScale(s, pw); return { w: Math.max(8, Math.round(pw * k)), h: Math.max(8, Math.round(ph * k)) }; }
+
+  async function processPage(gPage, mPage, s) {
+    const vp1 = gPage.getViewport({ scale: 1 });
+    const scale = s.scale != null ? s.scale : outScale(s, vp1.width);
+    const W = Math.max(8, Math.round(vp1.width * scale)), H = Math.max(8, Math.round(vp1.height * scale));
+    const art = await renderRegion(gPage, scale, 0, 0, W, H);
+    const mark = await renderRegion(mPage, scale, 0, 0, W, H);
+    const found = diffMask(art.data, mark.data);
+    if (!found.bbox) return null;
+    const cut = found.m;
+    const size = Math.max(found.bbox.x1 - found.bbox.x0, found.bbox.y1 - found.bbox.y0) / scale;
+    const D = s.offset * size, Bl = s.soft * size;
+    const dx = D * s.ux, dy = D * s.uy;
+    const { mask, interior } = stickerMask(cut, W, H);
+    const closed = interior > 0.002 * W * H;
+
+    const out = document.createElement("canvas"); out.width = W; out.height = H;
+    const g = out.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+    let note = "";
+    if (!closed) {
+      note = "Cutline isn't a closed shape, so no shadow or trimming was applied.";
+      g.drawImage(art.canvas, 0, 0);
+    } else {
+      const mc = maskCanvas(mask, W, H);
+      if (D > 0 && (s.ux || s.uy)) {
+        const sh = document.createElement("canvas"); sh.width = W; sh.height = H;
+        const sg = sh.getContext("2d");
+        sg.fillStyle = s.shColor; sg.fillRect(0, 0, W, H);
+        sg.globalCompositeOperation = "destination-in";
+        if (Bl > 0) sg.filter = "blur(" + (Bl * scale).toFixed(1) + "px)";
+        sg.drawImage(mc, dx * scale, dy * scale);
+        g.drawImage(sh, 0, 0);
+      }
+      if (s.clip) {
+        const ac = document.createElement("canvas"); ac.width = W; ac.height = H;
+        const ag = ac.getContext("2d");
+        ag.drawImage(art.canvas, 0, 0);
+        ag.globalCompositeOperation = "destination-in";
+        ag.drawImage(mc, 0, 0);
+        g.drawImage(ac, 0, 0);
+      } else {
+        // keep outside art, but let the shadow show where the page is blank white
+        const od = g.getImageData(0, 0, W, H), A = art.data.data, O = od.data;
+        for (let i = 0, j = 0; i < mask.length; i++, j += 4) {
+          if (mask[i] || !(A[j] > 250 && A[j+1] > 250 && A[j+2] > 250)) { O[j] = A[j]; O[j+1] = A[j+1]; O[j+2] = A[j+2]; }
+        }
+        g.putImageData(od, 0, 0);
+      }
+    }
+    const blob = await new Promise(r => out.toBlob(r, "image/jpeg", s.quality));
+    return { blob, w: W, h: H, note, pw: vp1.width, ph: vp1.height };
+  }
+
+  // ---------- jobs ----------
+  let items = [];          // {id, name, bytes, sample, status, outputs, error}
+  let gen = 0, running = false, selected = null, nextId = 1;
+
+  function baseName(n) { return n.replace(/\.pdf$/i, ""); }
+
+  async function processItem(item, s, myGen) {
+    item.status = "working"; item.error = ""; item.outputs.forEach(o => URL.revokeObjectURL(o.url)); item.outputs = [];
+    render();
+    let gDoc, mDoc;
+    try {
+      if (!s.names.length) throw new Error("Enter a spot color name.");
+      const gv = await makeVariant(item.bytes, s.names, "gray", s.k);
+      if (!gv.hits) throw new Error("No spot color named “" + $("spotName").value.trim() + "” in this PDF. Check the swatch name in the source file.");
+      const mv = await makeVariant(item.bytes, s.names, "mark", s.k);
+      if (myGen !== gen) return;
+      gDoc = await pdfjsLib.getDocument({ data: gv.bytes, isEvalSupported: false, useSystemFonts: true }).promise;
+      mDoc = await pdfjsLib.getDocument({ data: mv.bytes, isEvalSupported: false, useSystemFonts: true }).promise;
+      const multi = gDoc.numPages > 1;
+      for (let p = 1; p <= gDoc.numPages; p++) {
+        if (myGen !== gen) return;
+        const r = await processPage(await gDoc.getPage(p), await mDoc.getPage(p), s);
+        if (myGen !== gen) return;
+        if (!r) continue;
+        const name = baseName(item.name) + (multi ? "_p" + p : "") + s.suffix + ".jpg";
+        item.outputs.push({ ...r, name, url: URL.createObjectURL(r.blob), key: item.id + ":" + p, page: p });
+        render();
+      }
+      if (myGen !== gen) return;
+      if (!item.outputs.length) throw new Error("The spot color exists but nothing on the pages is drawn with it.");
+      item.status = "done";
+    } catch (e) {
+      if (myGen !== gen) return;
+      item.status = "error"; item.error = e && e.message ? e.message : String(e);
+    } finally {
+      if (gDoc) gDoc.destroy(); if (mDoc) mDoc.destroy();
+    }
+    render();
+  }
+
+  async function runQueue() {
+    if (running) return;
+    running = true;
+    try {
+      while (true) {
+        const myGen = gen;
+        const next = items.find(i => i.status === "queued");
+        if (!next) break;
+        await processItem(next, settings(), myGen);
+      }
+    } finally { running = false; }
+  }
+
+  let rerunTimer = 0;
+  function scheduleRerun() {
+    clearTimeout(rerunTimer);
+    rerunTimer = setTimeout(() => {
+      gen++;
+      items.forEach(i => { i.status = "queued"; });
+      render(); runQueue().then(() => { if (items.some(i => i.status === "queued")) runQueue(); });
+    }, 450);
+  }
+  document.querySelectorAll(".rail input").forEach(el => el.addEventListener(el.type === "text" ? "change" : "input", onSettingsChange));
+
+  // ---------- live preview of one file while choosing settings ----------
+  let stale = false, viewMode = "result", live = null, liveTimer = 0, liveSeq = 0;
+  const PREVIEW_EDGE = 1200;
+  const docCache = new Map(), origCache = new Map();
+  const openPdf = (bytes) => pdfjsLib.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true }).promise;
+
+  function getDocs(item, s) {
+    const key = item.id + "|" + s.names.join(",") + "|" + s.k;
+    if (!docCache.has(key)) {
+      for (const [k, v] of docCache) if (k.startsWith(item.id + "|")) { docCache.delete(k); v.then(d => { d.g.destroy(); d.m.destroy(); }).catch(() => {}); }
+      const pr = (async () => {
+        const gv = await makeVariant(item.bytes, s.names, "gray", s.k);
+        if (!gv.hits) throw new Error("No spot color named “" + $("spotName").value.trim() + "” in this PDF.");
+        const mv = await makeVariant(item.bytes, s.names, "mark", s.k);
+        return { g: await openPdf(gv.bytes), m: await openPdf(mv.bytes) };
+      })();
+      pr.catch(() => docCache.delete(key));
+      docCache.set(key, pr);
+    }
+    return docCache.get(key);
+  }
+  function dropCaches(itemId) {
+    for (const [k, v] of docCache) if (k.startsWith(itemId + "|")) { docCache.delete(k); v.then(d => { d.g.destroy(); d.m.destroy(); }).catch(() => {}); }
+    for (const [k, v] of origCache) if (k.startsWith(itemId + ":")) { origCache.delete(k); v.then(u => URL.revokeObjectURL(u)).catch(() => {}); }
+  }
+
+  function selectedInfo() {
+    for (const item of items) for (const o of item.outputs) if (o.key === shownKey()) return { item, o };
+    return null;
+  }
+  function shownKey() {
+    const outs = allOutputs();
+    return outs.find(o => o.key === selected) ? selected : (outs[0] ? outs[0].key : null);
+  }
+
+  function onSettingsChange() {
+    if (!allOutputs().length) { scheduleRerun(); return; }
+    stale = true;
+    render();
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(runLive, 200);
+  }
+
+  async function runLive() {
+    const sel = selectedInfo(); if (!sel || !stale) return;
+    const seq = ++liveSeq, s = settings();
+    const ps = { ...s, scale: Math.min(outScale(s, sel.o.pw), PREVIEW_EDGE / Math.max(sel.o.pw, sel.o.ph)) };
+    const fin = outDims(s, sel.o.pw, sel.o.ph);
+    if (live && live.key === sel.o.key) live.busy = true; else live = { key: sel.o.key, busy: true };
+    renderPreview();
+    let next;
+    try {
+      if (!s.names.length) throw new Error("Enter a spot color name.");
+      const d = await getDocs(sel.item, s);
+      const r = await processPage(await d.g.getPage(sel.o.page), await d.m.getPage(sel.o.page), ps);
+      next = r ? { key: sel.o.key, url: URL.createObjectURL(r.blob), w: r.w, h: r.h, note: r.note, fw: fin.w, fh: fin.h }
+               : { key: sel.o.key, error: "Nothing on this page is drawn with that spot color." };
+    } catch (e) { next = { key: sel.o.key, error: e && e.message ? e.message : String(e) }; }
+    if (seq !== liveSeq) { if (next.url) URL.revokeObjectURL(next.url); return; }
+    if (live && live.url) URL.revokeObjectURL(live.url);
+    live = next;
+    renderPreview();
+  }
+
+  function getOriginal(item, page) {
+    const key = item.id + ":" + page;
+    if (!origCache.has(key)) {
+      const pr = (async () => {
+        const doc = await openPdf(item.bytes.slice());
+        try {
+          const pg = await doc.getPage(page);
+          const vp = pg.getViewport({ scale: 1 });
+          const sc = PREVIEW_EDGE / Math.max(vp.width, vp.height);
+          const r = await renderRegion(pg, sc, 0, 0, Math.ceil(vp.width * sc), Math.ceil(vp.height * sc));
+          const blob = await new Promise(res => r.canvas.toBlob(res, "image/jpeg", 0.9));
+          return URL.createObjectURL(blob);
+        } finally { doc.destroy(); }
+      })();
+      pr.catch(() => origCache.delete(key));
+      origCache.set(key, pr);
+    }
+    return origCache.get(key);
+  }
+
+  function applyAll() {
+    stale = false; clearTimeout(liveTimer); liveSeq++;
+    if (live && live.url) URL.revokeObjectURL(live.url);
+    live = null;
+    gen++;
+    items.forEach(i => { i.status = "queued"; });
+    render(); runQueue();
+  }
+  $("applyAll").addEventListener("click", applyAll);
+
+  async function addFiles(fileList) {
+    const pdfs = [...fileList].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+    if (!pdfs.length) { toast("Only PDF files can be added."); return; }
+    if (items.some(i => i.sample)) { items.forEach(i => i.outputs.forEach(o => URL.revokeObjectURL(o.url))); items.filter(i => i.sample).forEach(i => dropCaches(i.id)); items = items.filter(i => !i.sample); selected = null; }
+    for (const f of pdfs) {
+      items.push({ id: nextId++, name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), sample: false, status: "queued", outputs: [], error: "" });
+    }
+    if (stale) { applyAll(); return; }
+    render(); runQueue();
+  }
+
+  // ---------- saving ----------
+  // dlState: "standalone" (opened as a plain web page), "pending", "ok", or "none" (shared viewer without save permission)
+  let dl = null;
+  const inViewer = !!(window.claude && window.claude.use);
+  let dlState = inViewer ? "pending" : "standalone";
+  if (inViewer) (async () => {
+    try { dl = await window.claude.use("downloads"); } catch { dl = null; }
+    dlState = dl ? "ok" : "none"; render();
+  })();
+  const NO_SAVE_MSG = "Saving files is turned off for people outside the owner's organization. Right-click the image and choose Save Image As.";
+  async function saveFile(filename, blob) {
+    if (dl) {
+      try { await dl.save({ filename, data: blob }); toast("Saved " + filename); }
+      catch (e) {
+        if (e && e.code === "declined") return;
+        if (e && ["unavailable", "not_granted", "capability_disabled", "capability_removed"].includes(e.code)) { dl = null; dlState = "none"; render(); toast(NO_SAVE_MSG); return; }
+        toast(e && e.code === "rate_limited" ? "A save prompt is already open." : "Couldn't save: " + (e && e.message || "unavailable here"));
+      }
+      return;
+    }
+    if (inViewer) { toast(dlState === "pending" ? "Still connecting, try again in a moment." : NO_SAVE_MSG); return; }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+  function allOutputs() { return items.flatMap(i => i.outputs); }
+  $("saveZip").addEventListener("click", async () => {
+    const outs = allOutputs(); if (!outs.length) return;
+    const zip = new JSZip(); const used = new Set();
+    for (const o of outs) { let n = o.name, k = 2; while (used.has(n)) n = o.name.replace(/\.jpg$/, "-" + k++ + ".jpg"); used.add(n); zip.file(n, o.blob); }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const stamp = new Date().toISOString().slice(0, 10);
+    saveFile("cutline-thumbnails-" + stamp + ".zip", blob);
+  });
+  $("clearAll").addEventListener("click", () => { gen++; stale = false; live = null; items.forEach(i => dropCaches(i.id)); items.forEach(i => i.outputs.forEach(o => URL.revokeObjectURL(o.url))); items = []; selected = null; render(); });
+
+  // ---------- UI ----------
+  const drop = $("drop"), input = $("fileInput");
+  $("pick").addEventListener("click", (e) => { e.stopPropagation(); input.click(); });
+  drop.addEventListener("click", () => input.click());
+  drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  input.addEventListener("change", () => { addFiles(input.files); input.value = ""; });
+  ["dragenter", "dragover"].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", (e) => addFiles(e.dataTransfer.files));
+  document.addEventListener("dragover", (e) => e.preventDefault());
+  document.addEventListener("drop", (e) => { if (!drop.contains(e.target)) { e.preventDefault(); addFiles(e.dataTransfer.files); } });
+
+  let toastTimer = 0;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2600); }
+
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function pill(item) {
+    if (item.status === "done" && item.sample) return el("span", "pill sample", "Sample");
+    const map = { queued: "Queued", working: "Working", done: "Ready", error: "Error" };
+    return el("span", "pill " + item.status, map[item.status]);
+  }
+
+  function render() {
+    const grid = $("grid"); grid.replaceChildren();
+    const outs = allOutputs();
+    const shown = shownKey();
+    for (const item of items) {
+      if (item.outputs.length) {
+        for (const o of item.outputs) {
+          const c = el("button", "card"); c.type = "button";
+          c.setAttribute("aria-current", String(o.key === shown));
+          const th = el("div", "thumb"); const im = el("img"); im.src = o.url; im.alt = o.name; th.appendChild(im);
+          const row = el("div", "row"); row.append(pill(item), el("span", "mono", o.w + "×" + o.h));
+          c.append(th, el("div", "fn", o.name), row);
+          if (o.note) c.appendChild(el("div", "note", o.note));
+          c.addEventListener("click", () => { selected = o.key; render(); if (stale) runLive(); });
+          grid.appendChild(c);
+        }
+      }
+      if (!item.outputs.length || item.status === "working" || item.status === "error") {
+        if (item.outputs.length && item.status !== "error") continue;
+        const c = el("div", "card");
+        const th = el("div", "thumb"); th.appendChild(item.status === "error" ? el("span", "mono", "No output") : el("div", "spinner"));
+        const row = el("div", "row"); row.append(pill(item));
+        c.append(th, el("div", "fn", item.name), row);
+        if (item.error) c.appendChild(el("div", "err", item.error));
+        grid.appendChild(c);
+      }
+    }
+    renderPreview();
+    const done = outs.length, busy = items.filter(i => i.status === "working" || i.status === "queued").length, errs = items.filter(i => i.status === "error").length;
+    $("count").textContent = items.length ? `${items.length} file${items.length > 1 ? "s" : ""} · ${done} JPG${done === 1 ? "" : "s"}` + (busy ? ` · ${busy} in progress` : "") + (errs ? ` · ${errs} with errors` : "") : "No files yet";
+    $("saveZip").disabled = !done || stale;
+    $("saveZip").hidden = dlState === "none"; $("clearAll").disabled = !items.length;
+    $("applyAll").hidden = !stale;
+    $("applyAll").textContent = "Apply to all " + items.length + " file" + (items.length === 1 ? "" : "s");
+  }
+
+  function renderSizeInfo() {
+    const box = $("sizeInfo"); box.replaceChildren();
+    const sel = selectedInfo();
+    if (!sel) { box.appendChild(el("div", "empty", "Add a PDF to see its size.")); return; }
+    const { pw, ph } = sel.o, s = settings(), out = outDims(s, pw, ph);
+    const inch = (v) => (Math.round(v / 72 * 100) / 100).toString();
+    const row = (k, v, cls) => { box.append(el("dt", null, k), el("dd", cls || null, v)); };
+    row("Page", inch(pw) + " × " + inch(ph) + " in");
+    row("Full size", Math.round(pw) + " × " + Math.round(ph) + " px");
+    row("Output", out.w + " × " + out.h + " px", "out");
+  }
+  $("maxW").addEventListener("input", renderSizeInfo);
+
+  function renderPreview() {
+    renderSizeInfo();
+    const pv = $("preview"); pv.replaceChildren();
+    const sel = selectedInfo();
+    if (!sel) { pv.hidden = true; return; }
+    pv.hidden = false;
+    const { item, o } = sel;
+
+    const head = el("div", "pv-head");
+    const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Preview view");
+    [["result", "Result"], ["original", "Original PDF"]].forEach(([k, label]) => {
+      const b = el("button", null, label); b.type = "button"; b.id = "view-" + k;
+      b.setAttribute("aria-pressed", String(viewMode === k));
+      b.addEventListener("click", () => { viewMode = k; renderPreview(); });
+      seg.appendChild(b);
+    });
+    const status = el("span", "mono", stale ? "Previewing new settings" : "Batch result");
+    head.append(seg, status);
+    pv.appendChild(head);
+
+    if (stale) {
+      const ban = el("div", "banner");
+      ban.append(el("span", null, "Settings changed. Only this file is updated so far; the batch still uses the previous settings."));
+      const ap = el("button", "btn", "Apply to all " + items.length + " file" + (items.length === 1 ? "" : "s")); ap.type = "button";
+      ap.addEventListener("click", applyAll);
+      ban.appendChild(ap);
+      pv.appendChild(ban);
+    }
+
+    const stage = el("div", "stage");
+    const im = el("img");
+    let sub = "";
+    if (viewMode === "original") {
+      im.alt = "Original page of " + item.name;
+      stage.appendChild(el("div", "spinner"));
+      getOriginal(item, o.page).then(url => {
+        if (viewMode !== "original" || !selectedInfo() || selectedInfo().o.key !== o.key) return;
+        im.src = url; stage.replaceChildren(im);
+      }).catch(e => stage.replaceChildren(el("div", "msg", "Couldn't render the original: " + e.message)));
+      sub = "Original page, as the PDF prints (cutline in its spot color, bleed included)";
+    } else if (stale && live && live.key === o.key && !live.url && live.error) {
+      stage.appendChild(el("div", "msg", live.error));
+    } else if (stale && live && live.key === o.key && live.url) {
+      im.src = live.url; im.alt = "Preview of " + o.name; stage.appendChild(im);
+      if (live.busy) { const sp = el("div", "spinner busy"); stage.appendChild(sp); }
+      sub = "Preview " + live.w + " × " + live.h + " px · final " + live.fw + " × " + live.fh + " px" + (live.note ? " · " + live.note : "");
+    } else if (stale) {
+      im.src = o.url; im.alt = o.name; im.style.opacity = "0.5"; stage.appendChild(im);
+      stage.appendChild(el("div", "spinner busy"));
+      sub = "Rendering preview…";
+    } else {
+      im.src = o.url; im.alt = "Preview of " + o.name; stage.appendChild(im);
+      sub = o.w + " × " + o.h + " px · " + (o.blob.size / 1024).toFixed(0) + " KB" + (item.sample ? " · sample file, add your own PDFs above" : "");
+    }
+    pv.appendChild(stage);
+
+    const meta = el("div", "meta");
+    const left = el("div"); left.append(el("div", "name", o.name), el("div", "mono", sub));
+    const save = el("button", "btn", "Save JPG"); save.type = "button"; save.id = "saveOne";
+    save.disabled = stale;
+    if (stale) save.title = "Apply the new settings first";
+    save.addEventListener("click", () => saveFile(o.name, o.blob));
+    meta.append(left, save);
+    pv.appendChild(meta);
+
+    if (dlState === "none") {
+      save.hidden = true;
+      const ban = el("div", "banner");
+      const txt = el("span");
+      txt.append("Saving files is turned off for people outside the owner's organization. Right-click the image above (long-press on a phone), choose ",
+        el("b", null, "Save Image As"), ", and name it ", el("b", null, o.name), ".");
+      const cp = el("button", "btn ghost", "Copy filename"); cp.type = "button";
+      cp.addEventListener("click", () => {
+        navigator.clipboard.writeText(o.name).then(() => toast("Copied " + o.name)).catch(() => {
+          const r = document.createRange(); r.selectNodeContents(txt.querySelectorAll("b")[1]);
+          const sl = getSelection(); sl.removeAllRanges(); sl.addRange(r); toast("Filename selected, press Cmd+C");
+        });
+      });
+      ban.append(txt, cp);
+      pv.appendChild(ban);
+    }
+  }
+
+  // ---------- sample PDF so the tool opens in a working state ----------
+  async function sampleBytes() {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([432, 432]);   // 6 × 6 in
+    page.drawRectangle({ x: 0, y: 0, width: 432, height: 432, color: rgb(0.86, 0.94, 0.99) });               // bleed beyond the cut
+    page.drawRectangle({ x: 54, y: 54, width: 324, height: 324, color: rgb(1, 1, 1) });
+    page.drawEllipse({ x: 216, y: 236, xScale: 92, yScale: 92, color: rgb(0.96, 0.6, 0.12) });
+    page.drawEllipse({ x: 216, y: 120, xScale: 150, yScale: 52, color: rgb(0.15, 0.58, 0.27) });
+    page.drawRectangle({ x: 136, y: 300, width: 160, height: 26, color: rgb(0.85, 0.14, 0.22) });
+    const ctx = doc.context;
+    const sep = ctx.obj([PDFName.of("Separation"), PDFName.of("CutLine"), PDFName.of("DeviceCMYK"),
+      ctx.obj({ FunctionType: 2, Domain: [0, 1], C0: [0, 0, 0, 0], C1: [0, 1, 0, 0], N: 1 })]);
+    const { Resources } = page.node.normalizedEntries();
+    Resources.set(PDFName.of("ColorSpace"), ctx.obj({ CS0: sep }));
+    const x0 = 46, y0 = 46, x1 = 386, y1 = 386, r = 48, k = r * 0.5523;
+    const path = [
+      `${x0 + r} ${y0} m`, `${x1 - r} ${y0} l`, `${x1 - r + k} ${y0} ${x1} ${y0 + r - k} ${x1} ${y0 + r} c`,
+      `${x1} ${y1 - r} l`, `${x1} ${y1 - r + k} ${x1 - r + k} ${y1} ${x1 - r} ${y1} c`,
+      `${x0 + r} ${y1} l`, `${x0 + r - k} ${y1} ${x0} ${y1 - r + k} ${x0} ${y1 - r} c`,
+      `${x0} ${y0 + r} l`, `${x0} ${y0 + r - k} ${x0 + r - k} ${y0} ${x0 + r} ${y0} c`, "h"
+    ].join("\n");
+    const content = `q /CS0 CS 1 SCN 1.5 w\n${path}\nS Q`;
+    page.node.addContentStream(ctx.register(ctx.stream(content)));
+    return await doc.save({ useObjectStreams: false });
+  }
+  (async () => {
+    render();
+    try {
+      const bytes = await sampleBytes();
+      if (items.some(i => !i.sample)) return;
+      items.push({ id: nextId++, name: "Sample_Sticker.pdf", bytes, sample: true, status: "queued", outputs: [], error: "" });
+      render(); runQueue();
+    } catch (e) { console.error(e); }
+  })();
+})();
+</script>
+
+</body>
+</html>
